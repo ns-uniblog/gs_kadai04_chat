@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>お買い物リスト</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- 左側: chat -->
+        <div class="left">
+            <h2>買いたいもの🎁</h2>
+            <div>
+                <input type="text" id="uname" placeholder="記入者">
+            </div>
+            <div>
+                <textarea id="text" placeholder="買いたいもの" cols="30" rows="10"></textarea>
+                <input type="text" id="amazonUrl" placeholder="Amazon URL">
+                <button id="send">送信</button>
+            </div>
+            <div id="output"></div>
+        </div>
+
+        <!-- 右側: bought -->
+        <div class="right">
+            <h2>買ったもの👍</h2>
+            <div id="boughtOutput"></div>
+        </div>
+    </div>
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
+    import { getDatabase, ref, push, set, update, remove, onChildAdded, onChildChanged, onChildRemoved } 
+    from "https://www.gstatic.com/firebasejs/10.13.1/firebase-database.js";
+
+    const firebaseConfig = {
+        apiKey: "",
+        authDomain: "",
+        projectId: "",
+        storageBucket: "",
+        messagingSenderId: "",
+        appId: ""
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const chatRef = ref(db, "chat");
+    const boughtRef = ref(db, "bought");
+
+    $("#send").on("click", function() {
+        const uname = $("#uname").val().trim() || "記入者：なし";
+        const text = $("#text").val().trim() || "買いたいもの：なし";
+        const amazonUrl = $("#amazonUrl").val().trim() || "Amazon：なし";
+
+        const msg = {
+            uname: uname,
+            text: text,
+            amazonUrl: amazonUrl,
+            timestamp: new Date().toLocaleString()
+        };
+
+        const newPostRef = push(chatRef);
+        set(newPostRef, msg);
+    });
+
+    $("#output").on("click", ".complete", function() {
+        const key = $(this).attr("data-key");
+        const timestamp = new Date().toLocaleString();
+        const msg = {
+            uname: $("#" + key + '_uname').text(),
+            text: $("#" + key + '_text').text(),
+            amazonUrl: $("#" + key + '_url').text(),
+            timestamp: $("#" + key + '_timestamp').text(),
+            completedAt: timestamp
+        };
+        const moveRef = push(boughtRef);
+        set(moveRef, msg);
+        remove(ref(db, "chat/" + key));
+    });
+
+    onChildAdded(chatRef, function(data) {
+        const msg = data.val();
+        const key = data.key;
+        let amazonUrlHtml = msg.amazonUrl;
+        let amazonPreviewHtml = '';
+        
+        if (msg.amazonUrl.startsWith("http")) {
+            amazonUrlHtml = `<a href="${msg.amazonUrl}" target="_blank">${msg.amazonUrl}</a>`;
+            amazonPreviewHtml = `<div class="amazon-preview" id="preview-${key}"></div>`;
+            fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(`https://www.amazon.co.jp/gp/rss/${msg.amazonUrl}`)}`)
+                .then(response => response.json())
+                .then(data => {
+                    const imageUrl = data.items[0]?.image_url;
+                    if (imageUrl) {
+                        $(`#preview-${key}`).html(`<img src="${imageUrl}" alt="Amazon商品画像" class="amazon-image">`);
+                    }
+                });
+        }
+
+        let h = `<p id="${key}" class="chat-item">
+                    <span class="timestamp" id="${key}_timestamp">${msg.timestamp}</span>
+                    <span class="update" data-key="${key}">更新</span>
+                    <span class="complete" data-key="${key}">完了</span>
+                    <span class="remove" data-key="${key}">削除</span><br>
+                    <span id="${key}_uname" contentEditable="true">${msg.uname}</span><br>
+                    <span id="${key}_text" contentEditable="true">${msg.text}</span><br>
+                    <span id="${key}_url" contentEditable="true">${amazonUrlHtml}</span><br>
+                    ${amazonPreviewHtml}
+                 </p>`;
+        $("#output").prepend(h);
+    });
+
+    onChildAdded(boughtRef, function(data) {
+        const msg = data.val();
+        const key = data.key;
+        let amazonUrlHtml = msg.amazonUrl;
+        if (msg.amazonUrl.startsWith("http")) {
+            amazonUrlHtml = `<a href="${msg.amazonUrl}" target="_blank">${msg.amazonUrl}</a>`;
+        }
+        let h = `<p id="${key}" class="bought-item">
+                    <span class="timestamp">${msg.timestamp}</span>
+                    <span class="remove" data-key="${key}">削除</span><br>
+                    <span>${msg.uname}</span><br>
+                    <span>${msg.text}</span><br>
+                    <span>${amazonUrlHtml}</span><br>
+                    <span class="timestamp">${msg.completedAt} 完了</span><br>
+                    </p>`;
+        $("#boughtOutput").prepend(h);
+    });
+
+    $("#output").on("click", ".remove", function() {
+        const key = $(this).attr("data-key");
+        remove(ref(db, "chat/" + key));
+    });
+
+    $("#output").on("click", ".update", function() {
+        const key = $(this).attr("data-key");
+        update(ref(db, "chat/" + key), {
+            text: $("#" + key + '_text').html()
+        });
+    });
+
+    onChildRemoved(chatRef, function(data) {
+        $("#" + data.key).remove();
+    });
+
+    onChildChanged(chatRef, function(data) {
+        $("#" + data.key + '_text').html(data.val().text);
+        $("#" + data.key + '_text').fadeOut(800).fadeIn(800);
+    });
+
+    </script>
+</body>
+</html>
