@@ -105,9 +105,9 @@
                     <span class="update" data-key="${key}">更新</span>
                     <span class="complete" data-key="${key}">完了</span>
                     <span class="remove" data-key="${key}">削除</span><br>
-                    <span id="${key}_uname" contentEditable="true">${msg.uname}</span><br>
+                    <span id="${key}_uname">${msg.uname}</span><br>
                     <span id="${key}_text" contentEditable="true">${msg.text}</span><br>
-                    <span id="${key}_url" contentEditable="true">${amazonUrlHtml}</span><br>
+                    <span id="${key}_url">${amazonUrlHtml}</span><br>
                     ${amazonPreviewHtml}
                  </p>`;
         $("#output").prepend(h);
@@ -143,6 +143,11 @@
         });
     });
 
+    $("#boughtOutput").on("click", ".remove", function() {
+        const key = $(this).attr("data-key");
+        remove(ref(db, "bought/" + key));
+    });
+
     onChildRemoved(chatRef, function(data) {
         $("#" + data.key).remove();
     });
@@ -150,6 +155,10 @@
     onChildChanged(chatRef, function(data) {
         $("#" + data.key + '_text').html(data.val().text);
         $("#" + data.key + '_text').fadeOut(800).fadeIn(800);
+    });
+
+    onChildRemoved(boughtRef, function(data) {
+        $("#" + data.key).remove();
     });
 
     </script>
